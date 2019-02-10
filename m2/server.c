@@ -12,7 +12,7 @@
 
 #include "listing.h" 
 
-#define PORT 8080
+#define PORT 80
 #define BACKLOG 10
 #define GET_HEAD_SIZE 2048
 #define UID 1000
@@ -20,7 +20,6 @@
 
 int socketConf();
 int deamonize();
-int bodyConf(int, char*);
 char* getTime();
 int interpretRequest(int, char*, char*);
 
@@ -67,7 +66,7 @@ int main(int argc, char* argv[]){
 	fclose(err);
 
 	mime = fopen(mimePath, "r");
-	if(access == 0){
+	if(mime == 0){
 		perror(mimePath);
 		exit(1);
 	}
@@ -166,29 +165,6 @@ int deamonize(){
 	return 0;
 }
 
-/*
-int bodyConf(int sd, char* filePath){
-	FILE *fp;
-	int buffer_size = 1024;
-	char* buff[buffer_size];
-	int x;
-
-	fp = fopen(filePath, "r");
-
-	if(fp == 0){
-		perror(getTime());
-		dprintf(sd, "HTTP/1.1 404 Not Found\nContent-Type: text/plain\n\nFile not found");
-	}
-	else{
-		x = 1;
-		while(x = fread(buff, 1, 1024, fp)){
-			write(sd, buff, x);
-		}
-	}
-}
-*/
-
-
 int response(int sd, char* filePath, FILE* mime){
 	int buffSize = 1024;
 	char buff[buffSize];
@@ -205,22 +181,23 @@ int response(int sd, char* filePath, FILE* mime){
 		x = getMime(filePath, buff, mime);
 
 		if(x == -1){
-			write(sd, "HTTP/1.1 200 OK\nContent-Type: text/html\n\n", 44);
-			write(sd, "<link rel=\"stylesheet\" type=\"text/css\" href=\"/style.css\" />", 65);
+			write(sd, "HTTP/1.1 200 OK\nContent-Type: text/html\n\n", 41);
+			write(sd, "<link rel=\"stylesheet\" type=\"text/css\" href=\"/style.css\" />", 60);
 			write(sd, "<body>", 6);
-			write(sd, "<img src=\"USN_logo.png\" height=\"100\" width=\"100\" />", 57);
+			write(sd, "<img src=\"USN_logo.png\" height=\"100\" width=\"100\" />", 52);
+			directoryList(sd, filePath);
 			write(sd, "</body>", 7);
 		}
 		else if(x == -2){
 			perror(getTime());
-			write(sd, "HTTP/1.1 510 Not Extended\nContent-Type: text/plain\n\nFurther extentions required", 82);
+			write(sd, "HTTP/1.1 510 Not Extended\nContent-Type: text/plain\n\nFurther extentions required", 79);
 		}
 		else if(x == -3){
 			perror(getTime());
-			write(sd, "HTTP/1.1 415 Unsupported Media Type\nContent-Type: text/plain\n\nMedia type not supported", 89);
+			write(sd, "HTTP/1.1 415 Unsupported Media Type\nContent-Type: text/plain\n\nMedia type not supported", 86);
 		}
 		else{
-			write(sd, "HTTP/1.1 200 OK\nContent-Type: ", 31);
+			write(sd, "HTTP/1.1 200 OK\nContent-Type: ", 30);
 			write(sd, buff, x);
 			write(sd, "\n\n", 4);
 

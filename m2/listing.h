@@ -4,6 +4,7 @@
 #include <unistd.h>
 #include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
 
 int writeLabel(int sd, char* tagName, char* contentType){
     char* buff;
@@ -70,6 +71,8 @@ void directoryList(int sd, char* filePath){
 
     chroot("/var/www");
 
+    chdir(filePath);
+
     buff = malloc(2048);
     temp = malloc(256);
 
@@ -78,6 +81,8 @@ void directoryList(int sd, char* filePath){
     writeLabel(sd, "h1", buff);
 
     write(sd, "<table>", 7);
+
+    write(sd, "<tr>", 4);
     writeLabel(sd, "th", "Rights");
     writeLabel(sd, "th", "UID");
     writeLabel(sd, "th", "GID");

@@ -10,7 +10,7 @@
 #include <fcntl.h>
 #include <time.h>
 
-#define PORT 8080
+#define PORT 80
 #define BACKLOG 10
 #define GET_HEAD_SIZE 2048
 #define UID 1000
