@@ -9,7 +9,7 @@
 int writeLabel(int sd, char* tagName, char* contentType){
     char* buff;
 
-    buff = malloc(4096);
+    buff = malloc(5000);
 
     strcpy(buff, "<");
     strcat(buff, tagName);
@@ -31,7 +31,7 @@ int writeLabel(int sd, char* tagName, char* contentType){
 int writeATags(int sd, char* temp, char* filePath){
     char* buff;
 
-    buff = malloc(4096);
+    buff = malloc(5000);
 
     strcpy(buff, "<td>");
     strcat(buff, "<a href ='");
@@ -73,10 +73,10 @@ void directoryList(int sd, char* filePath){
 
     chdir(filePath);
 
-    buff = malloc(2048);
-    temp = malloc(256);
+    buff = malloc(2000);
+    temp = malloc(200);
 
-    strcpy(buff, "Catalogue:");
+    strcpy(buff, "Catalogue :");
     strcat(buff, filePath);
     writeLabel(sd, "h1", buff);
 
@@ -87,7 +87,7 @@ void directoryList(int sd, char* filePath){
     writeLabel(sd, "th", "UID");
     writeLabel(sd, "th", "GID");
     writeLabel(sd, "th", "Name");
-    write(sd, "/tr>", 5);
+    write(sd, "</tr>", 5);
 
     while((ent = readdir(dir)) != NULL){
         if(stat (ent->d_name, &stat_buffer) < 0){

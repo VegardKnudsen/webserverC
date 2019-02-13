@@ -6,14 +6,13 @@
 #include <signal.h>
 #include <sys/types.h>
 #include <sys/stat.h>
-#include <sys/socket.h>
 #include <fcntl.h>
 #include <time.h>
 
-#include "listing.h" 
+#include "listing.h"
 
+#define BACKLOG 20
 #define PORT 80
-#define BACKLOG 10
 #define GET_HEAD_SIZE 2048
 #define UID 1000
 #define GID 1000
@@ -23,40 +22,38 @@ int deamonize();
 char* getTime();
 int interpretRequest(int, char*, char*);
 
-//m2
-int getDir(char*);
+int isDir(char*);
 int getMime(char*, char*, FILE*);
+//int logAccess(int, char*, FILE*);
 int response(int, char*, FILE*);
-int logAccess(int, char*, FILE*);
-int mimeSearch(char*, char*);
 
 int main(int argc, char* argv[]){
+
 	int server_sd, client_sd;
 	char buf[GET_HEAD_SIZE];
-
 	FILE* err;
 	FILE* mime;
-	FILE* access;
-	char *httpRequest;
+	//FILE* access;
+	
+	struct sockaddr_in addr;
+	socklen_t addr_len = sizeof(addr);
 
+	char *httpRequest;
 	char *filePath;
 	char *logPath = "/var/log/webserver_error.log";
-	char *accessPath = "/var/log/webserver_access.log";
+	//char *accessPath = "/var/log/webserver_access.log";
+	char *newRootDir = "/var/www";
 	char *mimePath = "/etc/mime.types";
 
-	char *newRootDir = "/var/www";
-
-	for(int i = 0; i<argc; i++){
-		if(strcmp(argv[i], "--log-file") == 0 && strcmp(argv[i+1], "--chroot-dir") != 0){
+	for (int i = 0; i<argc; i++){
+		if (strcmp(argv[i], "--log-file") == 0 && strcmp(argv[i+1], "--chroot-dir") != 0) {
 			logPath = argv[i+1];
-		}
-		else if(strcmp(argv[i], "--chroot-dir") == 0 && strcmp(argv[i], "--log-file") != 0){
+		} 
+        else if(strcmp(argv[i], "--chroot-dir") == 0 && strcmp(argv[i], "--log-file") != 0) {
 			newRootDir = argv[i+1];
 		}
 	}
 
-
-	//Logs errors
 	err = fopen(logPath, "a");
 	if(err == 0){
 		perror(logPath);
@@ -71,53 +68,45 @@ int main(int argc, char* argv[]){
 		exit(1);
 	}
 
+    /*
 	access = fopen(accessPath, "a");
 	if(access == 0){
 		perror(accessPath);
 		exit(1);
 	}
-
+    */
+	
 	if(chroot(newRootDir)){
 		perror(newRootDir);
 		exit(1);
 	}
-
-	//Changes root directory
-	//chroot("/var/www");
-
-	//Configures socket for server
+	
 	server_sd = socketConf();
-
-	//Deamonizes the process
 	deamonize();
-
 	listen(server_sd, BACKLOG);
-	while(1){
-		client_sd = accept(server_sd, NULL, NULL);
 
-		if(fork() == 0){
-			//Allocates memory space for request and filepath
+	while(1){
+		client_sd = accept(server_sd, NULL, NULL);		
+		// Child
+		if(fork()==0){
 			httpRequest = malloc(7);
 			filePath = malloc(1000);
-
-			//Request
+			
 			interpretRequest(client_sd, httpRequest, filePath);
 
-			//Response
 			response(client_sd, filePath, mime);
 
-			//Log access
-			logAccess(client_sd, filePath, access);
+			//logAccess(client_sd, filePath, access);
 
-			//Terminate
 			shutdown(client_sd, SHUT_RDWR);
 			exit(0);
 		}
+
 		else{
 			close(client_sd);
 		}
 	}
-	//Main end
+
 	return 0;
 }
 
@@ -125,39 +114,41 @@ int socketConf(){
 	int sd;
 	struct sockaddr_in server_address;
 
-	sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);
+	sd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP);	
 
 	setsockopt(sd, SOL_SOCKET, SO_REUSEADDR, &(int){1}, sizeof(int));
-	
-	server_address.sin_family			= AF_INET;
-	server_address.sin_port				= htons((u_short)PORT);
-	server_address.sin_addr.s_addr		= htonl(INADDR_ANY);
 
-	if(bind(sd, (struct sockaddr*)&server_address, sizeof(server_address)) != 0){
+	server_address.sin_family = AF_INET;
+	server_address.sin_port = htons((u_short)PORT);
+	server_address.sin_addr.s_addr = htonl(INADDR_ANY);
+
+	if (bind(sd, (struct sockaddr *)&server_address, sizeof(server_address)) != 0){
 		perror(getTime());
-		exit(1);
+		exit(1);		
 	}
 
-	setuid((uid_t) UID);
-	setgid((gid_t) GID);
+	setuid((uid_t) UID );
+	setgid((gid_t) GID );
 
 	return sd;
 }
 
 int deamonize(){
+
 	if(fork()){
 		raise(SIGSTOP);
-		exit(0);
+		exit(0); //parent dies
 	}
 
 	setsid();
-	signal(SIGTTOU, SIG_IGN);
+    
+	signal(SIGTTOU, SIG_IGN); 
 	signal(SIGTTIN, SIG_IGN);
 	signal(SIGTSTP, SIG_IGN);
 	signal(SIGCHLD, SIG_IGN);
 
 	if(fork()){
-		exit(0);
+		exit(0); 
 	}
 
 	close(0);
@@ -169,165 +160,159 @@ int response(int sd, char* filePath, FILE* mime){
 	int buffSize = 1024;
 	char buff[buffSize];
 	int x;
-	FILE* fp;
+    
+	FILE *fp;
 
 	fp = fopen(filePath, "r");
 
-	if(fp == 0){
+	if(fp==0){
 		perror(getTime());
-		dprintf(sd, "HTTP/1.1 404 Not Found\nContent-Type: text/plain\n\nFile not found");
+		write(sd, "HTTP/1.1 404 Not Found\nContent-Type: text/plain\n\nFile not found", 63);
 	}
 	else{
-		x = getMime(filePath, buff, mime);
 
-		if(x == -1){
+		x = getMime(filePath, buff, mime);
+		// error handling
+		if(x == -1) { //. not in string, guess it is a folder
 			write(sd, "HTTP/1.1 200 OK\nContent-Type: text/html\n\n", 41);
-			write(sd, "<link rel=\"stylesheet\" type=\"text/css\" href=\"/style.css\" />", 60);
+			write(sd, "<link rel=\"stylesheet\" type=\"text/css\" href=\"/style.css\" /> ", 60);
 			write(sd, "<body>", 6);
-			write(sd, "<img src=\"USN_logo.png\" height=\"100\" width=\"100\" />", 52);
+			//write(sd, "<img src=\"USN_logo.png\" height=\"100\" width=\"100\"/>", 50);
+            dprintf(sd, "<img src=\"USN_logo.png\" height=\"200px\" width=\"200px\"/>");
 			directoryList(sd, filePath);
 			write(sd, "</body>", 7);
-		}
-		else if(x == -2){
+		} else if (x == -2) {
 			perror(getTime());
 			write(sd, "HTTP/1.1 510 Not Extended\nContent-Type: text/plain\n\nFurther extentions required", 79);
-		}
-		else if(x == -3){
+		} else if (x == -3) {
 			perror(getTime());
 			write(sd, "HTTP/1.1 415 Unsupported Media Type\nContent-Type: text/plain\n\nMedia type not supported", 86);
-		}
-		else{
+		} else {
 			write(sd, "HTTP/1.1 200 OK\nContent-Type: ", 30);
 			write(sd, buff, x);
-			write(sd, "\n\n", 4);
-
-			while(x = fread(buff, 1, 1024, fp)){
-				write(sd, buff, x);
+			write(sd, "\n\n", 2);
+			// Body
+			while (x = fread(buff, 1, 1024, fp)) {
+	 			write(sd, buff, x);	
 			}
 		}
 	}
 }
 
 char* getTime(){
-	time_t currentTime;
-	struct tm *timeInfo;
+	time_t rawtime;
+	struct tm * timeinfo;
 
-	time(&currentTime);
-	timeInfo = localtime(&currentTime);
-	
-	return strtok(asctime(timeInfo), "\n");	
+	time ( &rawtime );
+	timeinfo = localtime ( &rawtime );
+	return strtok(asctime(timeinfo), "\n");
 }
 
 int interpretRequest(int sd, char* httpRequest, char* filePath){
 	char* buff;
 	char* token;
 
-	buff = malloc(4096);
+	buff = malloc(5000);
 
-	read(sd, buff, 4096);
-	token = strtok(buff, " ");
+	read(sd, buff, 5000);
+	token = strtok(buff, " ");	
 
-	strcpy(filePath, "/");
-
+	// method of splitting string
 	strcpy(httpRequest, token);
-	strcat(filePath, strtok(NULL, " "));
+	strcpy(filePath, strtok(NULL, " "));
 
 	free(buff);
 
 	return 0;
 }
 
-int getDir(char* path){
-	int x;
+int isDir(char* path){
+	int i;
 	int ret;
 	char lastChar;
 
-	x = 0;
+
+	i = 0;
 	lastChar = '/';
 
-	while(path[x]!= '\0'){
-		lastChar = path[x];
-		x++;
+	while(path[i] != '\0'){
+		lastChar = path[i];
+		i++;
 	}
 
-	if(lastChar == '/'){
+	if(lastChar == '/')
 		return 1;
-	}
-	else{
+	
+	else
 		return 0;
-	}
+
 }
 
 int mimeSearch(char* str, char* target){
-	int x, y;
+	int i, j;
 	int equal;
 
 	equal = 1;
-	x = y = 0;
+	i = j = 0;
 
-	while(str[x] != '\t'){
-		x++;
-	}
-	
-	while(str[x] == '\t'){
-		x++;
-	}
+	while(str[i] != '\t')
+		i++;
 
-	while(str[x] != '\0' && str[x] != '\n' || equal){
-		if(target[y] == '\0'){
-			return 1;
-		}
-		if(str[x] == target[y] && equal){
-			y++;
-		}
-		else if(str[y] == ' '){
+	while(str[i] == '\t')
+		i++;
+
+	while(str[i] != '\0' && str[i] != '\n' || equal) {
+		if(target[j] == '\0')
+			return 1; // true
+		if(str[i] == target[j] && equal)
+			j++;
+		else if(str[i] == ' ')
 			equal = 1;
-		}
-		else{
+		else{ // uequale bokstaver
 			equal = 0;
-			y = 0;
+			j = 0;
 		}
+		i++;
 	}
-	
-	if(equal){
+	if(equal)
 		return 1;
-	}
-	else{
-		return 0;
-	}
+	else
+		return 0; // not found
 }
 
 int getMime(char* filePath, char* buff, FILE* mime){
+
 	size_t len = 1024;
 	ssize_t read;
+
 	char *ext;
 	int sub;
-
+	
 	ext = strrchr(filePath, (int)'.');
-	if(ext == NULL){
+	if (ext == NULL) {
 		perror(getTime());
 		return -1;
 	}
 	*ext++;
 
-	if(mime == NULL){
+	if (mime == NULL) {
 		perror(getTime());
 		return -2;
 	}
 
-	while((read = getline(&buff, &len, mime)) != -1){
-		if(mimeSearch(buff, ext)){
+	while ((read = getline(&buff,&len, mime)) != -1) {
+		if (mimeSearch(buff, ext)){
 			printf("%s:%s\n", buff, ext);
 			sub = strlen(strchr(buff, (int)'\t'));
 			rewind(mime);
-			return read - sub;
+			return read - sub;			
 		}
 	}
 	rewind(mime);
+
 	return -3;
 }
-
-//Logs access to files on system
+/*
 int logAccess(int s, char* filePath, FILE* access){
 	socklen_t len;
 	struct sockaddr_storage addr;
@@ -337,6 +322,7 @@ int logAccess(int s, char* filePath, FILE* access){
 	len = sizeof addr;
 	getpeername(s, (struct sockaddr*)&addr, &len);
 
+	// deal with both IPv4 and IPv6:
 	if (addr.ss_family == AF_INET) {
 		struct sockaddr_in *s = (struct sockaddr_in *)&addr;
 		port = ntohs(s->sin_port);
@@ -349,3 +335,4 @@ int logAccess(int s, char* filePath, FILE* access){
 
 	fprintf(access,"%s tried to access: %s, at: %sn", ipstr, filePath, getTime());
 }
+*/
