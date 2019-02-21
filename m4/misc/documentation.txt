@@ -1,0 +1,6 @@
+"use strict" = koden blir kjørt i strict mode. Med strict kan du ikke benytte udeklarerte variabler.
+
+verbose
+node.runLoopOnce
+
+
