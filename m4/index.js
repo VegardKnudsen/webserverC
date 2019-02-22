@@ -115,4 +115,39 @@ app.post('/add/authors/:id/:firstname/:lastname/:nationality', (req, res) => {
     );
 });
 
+app.post('/post/authors/:id/:firstname/:lastname/:nationality', (req, res) => {
+
+    var SQL = `INSERT INTO authors SET firstname=${firstname} SET lastname=${lastname} WHERE authorID=${id}`;
+    /*
+    const idParam = req.params.id;
+    const firstnameParam = req.params.firstname;
+    const lastnameParam = req.params.lastname;
+    const nationalityParam = req.params.nationality;
+    */
+    db.get(SQL, [id], (err, rows) => {
+        if(err)
+            console.log("Something went wrong");
+    });
+    /*
+    db.run(
+        'INSERT INTO authors VALUES (authorID=$authorID, firstname=$firstname, lastname=$lastname, nationailty=$nationality)',
+        {
+            $authorID: idParam,
+            $firstname: firstnameParam,
+            $lastname: lastnameParam,
+            $nationality: nationalityParam
+        },
+        (err) => {
+            if (err){
+                console.log("Something wrong happened!");
+            }
+            else {
+                console.log("Author added!");
+            }
+        }
+    );
+    */
+   res.send("Job done");
+});
+
 app.listen(port, () => console.log('Listening on port ' + port));
